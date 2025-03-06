@@ -1,0 +1,45 @@
+trigger: none
+pool:
+  vmImage: 'ubuntu-latest'  # Use Ubuntu for the build
+
+variables:
+  pythonVersion: '3.11'
+  functionAppName: 'myfunctionapp'  # Replace with your Function App name
+  resourceGroupName: 'myrsg'  # Replace with your Azure Resource Group
+  artifactName: 'mypackage'
+  serviceConnection: 'myserviceconnection'
+
+
+stages:
+- stage: Build
+  displayName: 'Build Python Function App'
+  jobs:
+  - job: Build
+    displayName: 'Install dependencies and package'
+    steps:
+    - task: UsePythonVersion@0
+      inputs:
+        version: $(pythonVersion)
+
+    #The --only-binary option was added following this comment: https://github.com/Azure/azure-functions-python-worker/issues/1116#issuecomment-1279645389
+    - script: |
+        pip install --only-binary=:all: --no-cache-dir --target="./.python_packages/lib/site-packages" -r ./requirements.txt
+      displayName: 'Install dependencies'
+
+    - task: ArchiveFiles@2
+      displayName: 'Create package function app zip'
+      inputs:
+          rootFolderOrFile: '.'
+          includeRootFolder: false
+          archiveType: 'zip'
+          archiveFile: '$(System.DefaultWorkingDirectory)/functionapp.zip'
+          replaceExistingArchive: true
+
+    - task: AzureFunctionApp@1
+      inputs:
+        azureSubscription: $(serviceConnection)
+        appName: $(functionAppName)
+        resourceGroupName: $(resourceGroupName)
+        package: '$(System.DefaultWorkingDirectory)/functionapp.zip'
+        runtimeStack: 'PYTHON|3.11'
+        deploymentMethod: zipDeploy
